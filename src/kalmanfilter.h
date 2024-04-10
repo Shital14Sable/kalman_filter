@@ -2,7 +2,7 @@
 #define INCLUDE_AKFSFSIM_KALMANFILTER_H
 
 #include <vector>
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 
 #include "car.h"
 #include "sensors.h"

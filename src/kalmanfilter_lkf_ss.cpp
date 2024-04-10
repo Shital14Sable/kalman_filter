@@ -11,10 +11,10 @@
 
 // -------------------------------------------------- //
 // YOU CAN USE AND MODIFY THESE CONSTANTS HERE
-constexpr bool INIT_ON_FIRST_PREDICTION = true;
-constexpr double INIT_POS_STD = 0;
-constexpr double INIT_VEL_STD = 0;
-constexpr double ACCEL_STD = 0;
+constexpr bool INIT_ON_FIRST_PREDICTION = false;
+constexpr double INIT_POS_STD = 10;
+constexpr double INIT_VEL_STD = 10;
+constexpr double ACCEL_STD = 0.1;
 constexpr double GPS_POS_STD = 3.0;
 // -------------------------------------------------- //
 
@@ -35,7 +35,14 @@ void KalmanFilter::predictionStep(double dt)
 
             // Assume the initial position is (X,Y) = (0,0) m
             // Assume the initial velocity is 5 m/s at 45 degrees (VX,VY) = (5*cos(45deg),5*sin(45deg)) m/s
+            state << 0, 0, 0, 0;
 
+            const double init_pos_std = INIT_POS_STD;
+            const double init_vel_std = INIT_VEL_STD;
+            cov(0,0) = INIT_POS_STD*INIT_POS_STD;
+            cov(1,1) = INIT_POS_STD*INIT_POS_STD;
+            cov(2,2) = INIT_VEL_STD*INIT_VEL_STD;
+            cov(3,3) = INIT_VEL_STD*INIT_VEL_STD;
             setState(state);
             setCovariance(cov);
         // ----------------------------------------------------------------------- //
@@ -51,6 +58,17 @@ void KalmanFilter::predictionStep(double dt)
         // Hint: You can use the constants: ACCEL_STD
         // ----------------------------------------------------------------------- //
         // ENTER YOUR CODE HERE
+        MatrixXd F = Matrix4d::Zero();
+        MatrixXd Q = Matrix2d::Zero();
+        MatrixXd L = MatrixXd(4,2);
+
+        F << 1,0,dt,0,0,1,0,dt,0,0,1,0,0,0,0,1;
+        Q << (ACCEL_STD*ACCEL_STD), 0, 0 ,(ACCEL_STD*ACCEL_STD);
+
+        L << (0.5*dt*dt), 0, 0, (0.5*dt*dt), dt, 0, 0, dt;
+        
+        state = F * state;
+        cov = F * cov * F.transpose() + L * Q * L.transpose();
 
 
         // ----------------------------------------------------------------------- //
@@ -66,17 +84,33 @@ void KalmanFilter::handleGPSMeasurement(GPSMeasurement meas)
     {
         VectorXd state = getState();
         MatrixXd cov = getCovariance();
-
+        
         // Implement The Kalman Filter Update Step for the GPS Measurements in the 
         // section below.
         // Hint: Assume that the GPS sensor has a 3m (1 sigma) position uncertainty.
         // Hint: You can use the constants: GPS_POS_STD
         // ----------------------------------------------------------------------- //
         // ENTER YOUR CODE HERE 
+        MatrixXd H = MatrixXd(2, 4);
+        MatrixXd R = Matrix2d::Zero();
+        VectorXd z = Vector2d();
 
+
+        H << 1, 0, 0, 0, 0, 1, 0, 0;
+        R(0,0) = GPS_POS_STD*GPS_POS_STD;
+        R(1,1) = GPS_POS_STD*GPS_POS_STD;
+        z << meas.x, meas.y;
+
+        VectorXd z_hat = H*state;
+        VectorXd y = z - z_hat; //innovation
+        MatrixXd S = H * cov * H.transpose() + R; // measurement innovation
+        MatrixXd K = cov * H.transpose() * S.inverse(); //Kalman Gain
+
+        state = state + K * y;
+        cov = (MatrixXd::Identity(4,4) - K*H)*cov;
+        
 
         // ----------------------------------------------------------------------- //
-
         setState(state);
         setCovariance(cov);
     }
@@ -91,6 +125,15 @@ void KalmanFilter::handleGPSMeasurement(GPSMeasurement meas)
         // ENTER YOUR CODE HERE
             VectorXd state = Vector4d::Zero();
             MatrixXd cov = Matrix4d::Zero();
+
+            state(0) = meas.x;
+            state(1) = meas.y;
+            cov(0,0) = INIT_POS_STD*INIT_POS_STD;
+            cov(1,1) = INIT_POS_STD*INIT_POS_STD;
+            cov(2,2) = INIT_VEL_STD*INIT_VEL_STD;
+            cov(3,3) = INIT_VEL_STD*INIT_VEL_STD;
+
+
 
 
             setState(state);
@@ -122,4 +165,3 @@ VehicleState KalmanFilter::getVehicleState()
 void KalmanFilter::predictionStep(GyroMeasurement gyro, double dt){predictionStep(dt);}
 void KalmanFilter::handleLidarMeasurements(const std::vector<LidarMeasurement>& dataset, const BeaconMap& map){}
 void KalmanFilter::handleLidarMeasurement(LidarMeasurement meas, const BeaconMap& map){}
-
